@@ -2,16 +2,15 @@
 schema.py
 
 Defines the SQLite schema for the news/price pipeline and provides a
-function to initialize the database (create tables if they don't exist).
+function to initialize the database.
 
 Design notes:
 - articles.article_id is a hash of the URL (see utils/dedupe.py) so that
   re-scraping the same article naturally upserts instead of duplicating.
-- prices uses a composite primary key (ticker, date) since that's the
+- prices use a composite primary key (ticker, date) since that's the
   natural unique identifier for a daily bar.
-- No derived/labeled columns live here (no direction/magnitude/volatility) —
-  those are horizon-dependent and belong to the downstream modeling project,
-  not this pipeline. This DB is horizon-agnostic by design.
+- Purely raw data is stored in the DB, no transformations or calculations.
+- Data is stored independent of data horizons (e.g., 1-day, 1-week, 1-month, etc.)
 """
 
 import sqlite3
@@ -69,7 +68,7 @@ def init_db(db_path: Path = DEFAULT_DB_PATH) -> None:
 
 
 def list_tables(db_path: Path = DEFAULT_DB_PATH) -> list:
-    """Returns the list of table names currently in the database — useful for tests/sanity checks."""
+    """Returns the list of table names currently in the database"""
     conn = sqlite3.connect(db_path)
     try:
         cursor = conn.cursor()

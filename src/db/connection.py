@@ -1,10 +1,9 @@
 """
 connection.py
 
-Thin wrapper around sqlite3 connections so the rest of the codebase doesn't
+Wrapper around sqlite3 connections so the rest of the codebase doesn't
 need to know the DB path or connection details directly. Also centralizes
-common insert helpers (upsert-style) used by both the news and price
-scrapers.
+common insert helpers used by both the news and price scrapers.
 """
 
 import sqlite3
@@ -73,7 +72,7 @@ def upsert_articles(articles: list, db_path: Path = DEFAULT_DB_PATH) -> int:
 def upsert_prices(prices: list, db_path: Path = DEFAULT_DB_PATH) -> int:
     """
     Insert or replace daily price bars (ticker, date) is the natural key,
-    so re-fetching the same day overwrites rather than duplicating.
+    so re-fetching the same-day overwrites values rather than duplicating.
 
     Args:
         prices: list of dicts with keys (ticker, date, open, high, low, close, volume)
