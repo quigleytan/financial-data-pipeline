@@ -1,0 +1,16 @@
+# config.yaml
+#
+# Central place for pipeline settings so tickers/dates/limits don't get
+# hardcoded and scattered across fetch_prices.py and fetch_news.py.
+
+tickers:
+  - AAPL
+  - MSFT
+
+prices:
+  start_date: "2023-01-01"
+  end_date: "2024-01-01"
+
+news:
+  limit_per_ticker: 50
+  pause_seconds: 12.0   # based on Alpha Vantage free tier (5 requests/minute)
