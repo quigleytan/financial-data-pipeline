@@ -103,7 +103,7 @@ stock-news-pipeline/
 
 ---
 
-## Notes & Gotchas
+## Notes
 
 - **Alpha Vantage free tier** is limited to **5 requests/minute** and **500 requests/day**. The pipeline pauses between tickers by default; adjust `pause_seconds` if needed.
 - The API sometimes returns **HTTP 200 with a `Note` / `Information` message** when rate-limited. The pipeline detects this and raises a clear error rather than silently storing nothing.
@@ -111,13 +111,9 @@ stock-news-pipeline/
 
 ---
 
-## Roadmap
+## Example Output
 
-- [ ] Scheduled runs (cron / APScheduler)
-- [ ] Custom sentiment model, compared against the Alpha Vantage baseline
-- [ ] Export to Parquet / CSV
-- [ ] Simple Flask dashboard
-- [ ] Dockerfile
+
 
 
 ---
