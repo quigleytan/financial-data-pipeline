@@ -196,8 +196,12 @@ A few decisions worth calling out, since they shaped the design:
 
 ## License
 
-_Not yet licensed_
+MIT: see [LICENSE](LICENSE) for details.
 
----
+## Sources Used
+
+1. [Alpha Vantage News Sentiment API](https://www.alphavantage.co/documentation/#news-sentiment)
+2. [yfinance](https://github.com/ranaroussi/yfinance)
+3. [Browserless: Web Scraping Guide](https://www.browserless.io/blog/web-scraping-guide)
 
 **Author:** Tanner Quigley
