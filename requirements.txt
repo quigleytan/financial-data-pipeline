@@ -1,4 +1,4 @@
 yfinance
 requests
 python-dotenv
-pyyaml
+pyyamlpytest
