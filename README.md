@@ -42,6 +42,7 @@ the data layer.
 - **Rate-limit aware** - built-in pause between ticker requests to respect the Alpha Vantage free tier (5 requests/minute).
 - **Per-stage fault tolerance** - in the unified pipeline runner, a failure fetching prices doesn't prevent news from being fetched (and vice versa); each stage fails independently.
 
+
 ---
 
 ## Project Structure
@@ -124,17 +125,41 @@ stock-news-pipeline/
 
 ---
 
-## Data Model (high level)
-
+## Data Model
+ 
 | Table      | Key                  | Columns                                                                                  |
 |------------|----------------------|-------------------------------------------------------------------------------------------|
 | `articles` | `article_id` (PK)    | `article_id`, `ticker`, `source`, `published_at`, `headline`, `body`, `url`, `scraped_at` |
 | `prices`   | `(ticker, date)` (PK) | `ticker`, `date`, `open`, `high`, `low`, `close`, `volume`                                |
-
+ 
+```mermaid
+erDiagram
+  ARTICLES }o--o{ PRICES : "same ticker"
+  ARTICLES {
+    string article_id PK
+    string ticker
+    string source
+    timestamp published_at
+    string headline
+    string body
+    string url
+    timestamp scraped_at
+  }
+  PRICES {
+    string ticker PK
+    date date PK
+    real open
+    real high
+    real low
+    real close
+    integer volume
+  }
+```
+ 
 > Authoritative definitions live in `src/db/schema.py`. Deliberately absent: any derived/labeled columns
 > (direction, magnitude, volatility). Those are horizon-dependent and belong in the downstream modeling project,
 > keeping this DB reusable regardless of what prediction horizon gets chosen later.
-
+ 
 ---
 
 ## Tech Stack
@@ -150,12 +175,6 @@ stock-news-pipeline/
 ---
 
 ## Known Issues & Roadmap
-
-**Not yet built**
-- No automated test suite - `tests/` exists as a placeholder folder, but validation so far has been manual
-  (mocked API responses checked ad hoc during development, not committed as repeatable unit tests).
-- No dependency version pinning in `requirements.txt` yet - a future upstream update to any dependency could
-  change behavior without warning. Worth pinning once the project stabilizes.
 
 **Known limitations**
 - Alpha Vantage's free tier returns **HTTP 200 with a `Note`/`Information` message** instead of an error when
