@@ -8,9 +8,9 @@ database using upsert_articles() (see db/connection.py).
 API docs: https://www.alphavantage.co/documentation/#news-sentiment
 
 Note: Alpha Vantage's free tier includes a pre-computed sentiment score
-per article. Currently, it is stored as a reference/baseline (for comparison
-against this model), but the pipeline itself stays horizon-agnostic as no
-derived labels live in this table.
+per article. We store it for now as a reference/baseline (useful later
+to compare against our own model), but the pipeline itself stays
+horizon-agnostic - no derived labels live in this table.
 """
 
 import os
@@ -95,15 +95,24 @@ def _parse_av_timestamp(raw_ts: str) -> str:
     return f"{raw_ts[0:4]}-{raw_ts[4:6]}-{raw_ts[6:8]}T{raw_ts[9:11]}:{raw_ts[11:13]}:{raw_ts[13:15]}"
 
 
-def fetch_and_store_news(ticker: str, limit: int = 50) -> int:
+def fetch_and_store_news(ticker: str, limit: int = 50, db_path=None) -> int:
     """
     Fetches news for a single ticker and upserts it into the articles table.
+
+    Args:
+        ticker: e.g. "AAPL"
+        limit: max articles to request
+        db_path: optional override of the DB path (defaults to DEFAULT_DB_PATH
+                 via upsert_articles if not provided) - mainly used by tests
+                 to write into a throwaway DB instead of the real one.
 
     Returns:
         Number of new rows actually inserted (duplicates skipped).
     """
     raw_articles = fetch_news_raw(ticker, limit=limit)
     parsed = [_parse_article(raw, ticker) for raw in raw_articles]
+    if db_path is not None:
+        return upsert_articles(parsed, db_path=db_path)
     return upsert_articles(parsed)
 
 
@@ -124,5 +133,12 @@ def fetch_and_store_multiple(tickers: list, limit: int = 50, pause_seconds: floa
 
 
 if __name__ == "__main__":
-    results = fetch_and_store_multiple(["AAPL", "MSFT"])
+    from src.utils.config import load_config
+
+    config = load_config()
+    tickers = config["tickers"]
+    limit = config["news"]["limit_per_ticker"]
+    pause_seconds = config["news"]["pause_seconds"]
+
+    results = fetch_and_store_multiple(tickers, limit=limit, pause_seconds=pause_seconds)
     print(f"New articles inserted per ticker: {results}")

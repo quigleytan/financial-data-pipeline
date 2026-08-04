@@ -4,6 +4,9 @@ fetch_prices.py
 Fetches daily OHLCV price data via yfinance and writes it into the
 pipeline's SQLite database using upsert_prices() (see db/connection.py).
 
+Unlike the old CSV-based version, this module doesn't need its own caching
+logic - the DB itself acts as the cache. We can always check what dates
+we already have before deciding whether to hit the network again.
 """
 
 import pandas as pd
@@ -12,12 +15,14 @@ import yfinance as yf
 from src.db.connection import get_connection, upsert_prices
 
 
-def get_existing_date_range(ticker: str) -> tuple:
+def get_existing_date_range(ticker: str, db_path=None) -> tuple:
     """
     Returns (min_date, max_date) already stored for this ticker, or
     (None, None) if we have nothing yet.
     """
-    with get_connection() as conn:
+    from src.db.schema import DEFAULT_DB_PATH
+    path = db_path if db_path is not None else DEFAULT_DB_PATH
+    with get_connection(path) as conn:
         row = conn.execute(
             "SELECT MIN(date), MAX(date) FROM prices WHERE ticker = ?",
             (ticker,),
@@ -25,7 +30,7 @@ def get_existing_date_range(ticker: str) -> tuple:
     return row[0], row[1]
 
 
-def fetch_and_store_prices(ticker: str, start: str, end: str) -> int:
+def fetch_and_store_prices(ticker: str, start: str, end: str, db_path=None) -> int:
     """
     Downloads daily OHLCV data for a ticker between start and end dates
     and upserts it into the prices table.
@@ -34,6 +39,8 @@ def fetch_and_store_prices(ticker: str, start: str, end: str) -> int:
         ticker: e.g. "AAPL"
         start: "YYYY-MM-DD"
         end: "YYYY-MM-DD"
+        db_path: optional override of the DB path - mainly used by tests
+                 to write into a throwaway DB instead of the real one.
 
     Returns:
         Number of rows affected in the DB.
@@ -62,6 +69,8 @@ def fetch_and_store_prices(ticker: str, start: str, end: str) -> int:
         for date, row in df.iterrows()
     ]
 
+    if db_path is not None:
+        return upsert_prices(records, db_path=db_path)
     return upsert_prices(records)
 
 
@@ -79,7 +88,14 @@ def fetch_and_store_multiple(tickers: list, start: str, end: str) -> dict:
 
 
 if __name__ == "__main__":
-    results = fetch_and_store_multiple(["AAPL", "MSFT"], start="2023-01-01", end="2024-01-01")
+    from src.utils.config import load_config
+
+    config = load_config()
+    tickers = config["tickers"]
+    start = config["prices"]["start_date"]
+    end = config["prices"]["end_date"]
+
+    results = fetch_and_store_multiple(tickers, start=start, end=end)
     print(f"Rows affected per ticker: {results}")
 
     for ticker in results:
