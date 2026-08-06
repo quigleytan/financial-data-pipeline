@@ -8,8 +8,8 @@ tickers:
   - MSFT
 
 prices:
-  start_date: "2023-01-01"
-  end_date: "2024-01-01"
+  start_date: "2025-01-01"
+  end_date: "2026-08-05"
 
 news:
   limit_per_ticker: 50
