@@ -1,4 +1,4 @@
-# Stock News Pipeline
+# Financial Data Ingestion Pipeline
 
 A lightweight data pipeline that collects financial news and stock prices for a configurable set of tickers,
 deduplicates the results, and stores everything in a local SQLite database for later analysis and modeling.
