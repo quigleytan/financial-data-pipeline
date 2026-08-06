@@ -7,10 +7,12 @@ database using upsert_articles() (see db/connection.py).
 
 API docs: https://www.alphavantage.co/documentation/#news-sentiment
 
-Note: Alpha Vantage's free tier includes a pre-computed sentiment score
-per article. We store it for now as a reference/baseline (useful later
-to compare against our own model), but the pipeline itself stays
-horizon-agnostic - no derived labels live in this table.
+Supports optional time_from/time_to parameters (format: YYYYMMDDTHHMM) to
+pull HISTORICAL news rather than only the most recent articles. This
+matters for downstream modeling: news from "just now" has no known future
+price outcome yet, so a modeling project needs news old enough that its
+forward-looking labels can actually be computed. Without a date range,
+this endpoint defaults to the latest news relative to today.
 """
 
 import os
@@ -37,7 +39,7 @@ def _get_api_key() -> str:
     return api_key
 
 
-def fetch_news_raw(ticker: str, limit: int = 50) -> list:
+def fetch_news_raw(ticker: str, limit: int = 50, time_from: str = None, time_to: str = None) -> list:
     """
     Calls the Alpha Vantage NEWS_SENTIMENT endpoint for a single ticker
     and returns the raw list of article dicts from the API response.
@@ -46,6 +48,10 @@ def fetch_news_raw(ticker: str, limit: int = 50) -> list:
         ticker: e.g. "AAPL"
         limit: max articles to request (Alpha Vantage caps this at 1000,
                but the free tier's daily request limit is the real constraint)
+        time_from: optional start of date range, format "YYYYMMDDTHHMM"
+            (e.g. "20260601T0000"). Without this, Alpha Vantage returns
+            only the most recent news relative to today.
+        time_to: optional end of date range, same format as time_from.
 
     Returns:
         List of raw article dicts, as returned by the API under the
@@ -57,6 +63,10 @@ def fetch_news_raw(ticker: str, limit: int = 50) -> list:
         "limit": limit,
         "apikey": _get_api_key(),
     }
+    if time_from is not None:
+        params["time_from"] = time_from
+    if time_to is not None:
+        params["time_to"] = time_to
 
     response = requests.get(ALPHA_VANTAGE_BASE_URL, params=params, timeout=30)
     response.raise_for_status()
@@ -95,28 +105,33 @@ def _parse_av_timestamp(raw_ts: str) -> str:
     return f"{raw_ts[0:4]}-{raw_ts[4:6]}-{raw_ts[6:8]}T{raw_ts[9:11]}:{raw_ts[11:13]}:{raw_ts[13:15]}"
 
 
-def fetch_and_store_news(ticker: str, limit: int = 50, db_path=None) -> int:
+def fetch_and_store_news(
+    ticker: str, limit: int = 50, time_from: str = None, time_to: str = None, db_path=None
+) -> int:
     """
     Fetches news for a single ticker and upserts it into the articles table.
 
     Args:
         ticker: e.g. "AAPL"
         limit: max articles to request
-        db_path: optional override of the DB path (defaults to DEFAULT_DB_PATH
-                 via upsert_articles if not provided) - mainly used by tests
+        time_from: optional "YYYYMMDDTHHMM" start of historical date range
+        time_to: optional "YYYYMMDDTHHMM" end of historical date range
+        db_path: optional override of the DB path - mainly used by tests
                  to write into a throwaway DB instead of the real one.
 
     Returns:
         Number of new rows actually inserted (duplicates skipped).
     """
-    raw_articles = fetch_news_raw(ticker, limit=limit)
+    raw_articles = fetch_news_raw(ticker, limit=limit, time_from=time_from, time_to=time_to)
     parsed = [_parse_article(raw, ticker) for raw in raw_articles]
     if db_path is not None:
         return upsert_articles(parsed, db_path=db_path)
     return upsert_articles(parsed)
 
 
-def fetch_and_store_multiple(tickers: list, limit: int = 50, pause_seconds: float = 12.0) -> dict:
+def fetch_and_store_multiple(
+    tickers: list, limit: int = 50, pause_seconds: float = 12.0, time_from: str = None, time_to: str = None
+) -> dict:
     """
     Fetch and store news for multiple tickers, pausing between requests
     to respect Alpha Vantage's free-tier rate limit (5 requests/minute).
@@ -126,7 +141,7 @@ def fetch_and_store_multiple(tickers: list, limit: int = 50, pause_seconds: floa
     """
     results = {}
     for i, ticker in enumerate(tickers):
-        results[ticker] = fetch_and_store_news(ticker, limit=limit)
+        results[ticker] = fetch_and_store_news(ticker, limit=limit, time_from=time_from, time_to=time_to)
         if i < len(tickers) - 1:
             time.sleep(pause_seconds)
     return results
@@ -139,6 +154,10 @@ if __name__ == "__main__":
     tickers = config["tickers"]
     limit = config["news"]["limit_per_ticker"]
     pause_seconds = config["news"]["pause_seconds"]
+    time_from = config["news"].get("time_from")
+    time_to = config["news"].get("time_to")
 
-    results = fetch_and_store_multiple(tickers, limit=limit, pause_seconds=pause_seconds)
+    results = fetch_and_store_multiple(
+        tickers, limit=limit, pause_seconds=pause_seconds, time_from=time_from, time_to=time_to
+    )
     print(f"New articles inserted per ticker: {results}")

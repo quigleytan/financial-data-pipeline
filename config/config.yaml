@@ -13,4 +13,16 @@ prices:
 
 news:
   limit_per_ticker: 50
-  pause_seconds: 12.0   # based on Alpha Vantage free tier (5 requests/minute)
+  pause_seconds: 12.0
+
+  # respects Alpha Vantage free tier (5 requests/minute)
+  # Optional: pull HISTORICAL news instead of only the most recent articles.
+  # Format: YYYYMMDDTHHMM. Leave unset (or remove both lines) to get the
+  # latest news relative to today, same as before.
+  #
+  # This matters for modeling: news from "just now" has no known future
+  # price outcome yet. time_from/time_to should land well before today,
+  # with enough room before prices.end_date for the prediction horizon
+  # (e.g. 5 trading days for a "weekly" horizon) to have already happened.
+  time_from: "20260601T0000"
+  time_to: "20260720T0000"
