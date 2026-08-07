@@ -116,7 +116,7 @@ def fetch_and_store_news(
         limit: max articles to request
         time_from: optional "YYYYMMDDTHHMM" start of historical date range
         time_to: optional "YYYYMMDDTHHMM" end of historical date range
-        db_path: optional override of the DB path - mainly used by tests
+        db_path: optional override of the DB path -- mainly used by tests
                  to write into a throwaway DB instead of the real one.
 
     Returns:
@@ -147,6 +147,72 @@ def fetch_and_store_multiple(
     return results
 
 
+def fetch_and_store_news_chunked(
+    ticker: str,
+    time_from: str,
+    time_to: str,
+    chunk_days: int = 14,
+    limit_per_chunk: int = 50,
+    pause_seconds: float = 12.0,
+    db_path=None,
+) -> int:
+    """
+    Fetches news across [time_from, time_to] by making several smaller
+    requests over sub-windows, instead of one request over the whole range.
+
+    Why this exists: Alpha Vantage's default sort is "latest first" WITHIN
+    whatever date range you give it. A single request over a wide range
+    still returns articles clustered near time_to (up to `limit` of them),
+    not spread across the range -- so widening time_from alone doesn't
+    give you date diversity, it just gives you the same near-time_to
+    articles again (upsert then reports 0 new, since they're duplicates).
+
+    Chunking into sub-windows forces each request to pull from a specific
+    slice of the range, which is what actually produces articles spread
+    across many distinct trading dates -- necessary for a training set
+    where labels vary from row to row.
+
+    Args:
+        ticker: e.g. "AAPL"
+        time_from, time_to: "YYYYMMDDTHHMM", the overall range to cover
+        chunk_days: size of each sub-window in days
+        limit_per_chunk: max articles requested per sub-window
+        pause_seconds: pause between requests (rate limit)
+
+    Returns:
+        Total number of new rows inserted across all chunks.
+    """
+    from datetime import datetime, timedelta
+
+    start = datetime.strptime(time_from, "%Y%m%dT%H%M")
+    end = datetime.strptime(time_to, "%Y%m%dT%H%M")
+
+    total_inserted = 0
+    chunk_start = start
+    first_chunk = True
+
+    while chunk_start < end:
+        chunk_end = min(chunk_start + timedelta(days=chunk_days), end)
+
+        if not first_chunk:
+            time.sleep(pause_seconds)
+        first_chunk = False
+
+        inserted = fetch_and_store_news(
+            ticker,
+            limit=limit_per_chunk,
+            time_from=chunk_start.strftime("%Y%m%dT%H%M"),
+            time_to=chunk_end.strftime("%Y%m%dT%H%M"),
+            db_path=db_path,
+        )
+        total_inserted += inserted
+        print(f"  {ticker} chunk {chunk_start.date()} to {chunk_end.date()}: {inserted} new articles")
+
+        chunk_start = chunk_end
+
+    return total_inserted
+
+
 if __name__ == "__main__":
     from src.utils.config import load_config
 
@@ -156,8 +222,22 @@ if __name__ == "__main__":
     pause_seconds = config["news"]["pause_seconds"]
     time_from = config["news"].get("time_from")
     time_to = config["news"].get("time_to")
+    chunk_days = config["news"].get("chunk_days", 14)
 
-    results = fetch_and_store_multiple(
-        tickers, limit=limit, pause_seconds=pause_seconds, time_from=time_from, time_to=time_to
-    )
-    print(f"New articles inserted per ticker: {results}")
+    if time_from and time_to:
+        # Historical range requested -> chunk it to get date-spread articles,
+        # not just the latest ones within the range (see docstring on
+        # fetch_and_store_news_chunked for why this matters).
+        results = {}
+        for i, ticker in enumerate(tickers):
+            if i > 0:
+                time.sleep(pause_seconds)
+            print(f"Fetching {ticker} in {chunk_days}-day chunks from {time_from} to {time_to}...")
+            results[ticker] = fetch_and_store_news_chunked(
+                ticker, time_from=time_from, time_to=time_to,
+                chunk_days=chunk_days, limit_per_chunk=limit, pause_seconds=pause_seconds,
+            )
+        print(f"\nNew articles inserted per ticker: {results}")
+    else:
+        results = fetch_and_store_multiple(tickers, limit=limit, pause_seconds=pause_seconds)
+        print(f"New articles inserted per ticker: {results}")
